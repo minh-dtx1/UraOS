@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>URA · Trợ lý AI</title>
+<style>
+  :root { --c: #3fe0ff; --c2: #0b8db0; --bg: #03080d; --ink: #d8f6ff; --muted: #6f9aa8; }
+  [data-theme="red"]    { --c: #ff4d4d; --c2: #a31818; }
+  [data-theme="gold"]   { --c: #ffc93c; --c2: #b07a00; }
+  [data-theme="green"]  { --c: #4dffa6; --c2: #0f8f55; }
+  [data-theme="purple"] { --c: #b68cff; --c2: #6a3fc0; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 30%, #0a1a24 0%, var(--bg) 70%);
+    color: var(--ink); font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+  }
+  body::before { /* lưới HUD */
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .07;
+    background-image: linear-gradient(var(--c) 1px, transparent 1px), linear-gradient(90deg, var(--c) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 14px 22px;
+    font-size: 13px; letter-spacing: .2em; color: var(--muted); text-transform: uppercase; }
+  header b { color: var(--c); font-weight: 600; }
+  #clock { font-variant-numeric: tabular-nums; }
+  main { display: grid; grid-template-columns: minmax(260px, 420px) 1fr; gap: 10px; min-height: 0; padding: 0 22px; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; grid-template-rows: 230px 1fr; } }
+
+  /* Lõi năng lượng */
+  #core-wrap { display: grid; place-items: center; position: relative; }
+  #core { width: min(340px, 70vw); aspect-ratio: 1; position: relative; cursor: pointer; }
+  .ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; }
+  .r1 { border-top-color: var(--c); border-bottom-color: var(--c); animation: spin 8s linear infinite; }
+  .r2 { inset: 10%; border: 1px dashed var(--c2); animation: spin 20s linear infinite reverse; }
+  .r3 { inset: 20%; border-left-color: var(--c); border-right-color: var(--c); border-width: 3px; animation: spin 5s linear infinite; }
+  .r4 { inset: 30%; border: 1px solid var(--c2); }
+  .orb { position: absolute; inset: 37%; border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, var(--c) 35%, var(--c2) 70%, transparent 72%);
+    box-shadow: 0 0 40px var(--c), 0 0 90px var(--c2); transition: transform .15s; }
+  #core.listening .orb { animation: pulse .8s ease-in-out infinite; }
+  #core.thinking .r1, #core.thinking .r3 { animation-duration: 1.2s; }
+  #core.speaking .orb { animation: pulse .35s ease-in-out infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 50% { transform: scale(1.15); filter: brightness(1.4); } }
+  #state { position: absolute; bottom: 4%; font-size: 12px; letter-spacing: .3em; color: var(--c); text-transform: uppercase; }
+
+  /* Nhật ký hội thoại */
+  #log { overflow-y: auto; padding: 10px 6px 20px; display: flex; flex-direction: column; gap: 12px; min-height: 0;
+    mask-image: linear-gradient(transparent, #000 30px); }
+  .msg { max-width: 760px; line-height: 1.55; white-space: pre-wrap; word-wrap: break-word; }
+  .msg .who { font-size: 11px; letter-spacing: .25em; color: var(--muted); display: block; margin-bottom: 2px; }
+  .msg.ura { border-left: 2px solid var(--c); padding-left: 12px; }
+  .msg.ura .who { color: var(--c); }
+  .msg.me { align-self: flex-end; text-align: right; color: #a9c7d1; }
+  .msg .status { display: block; font-size: 12px; color: var(--muted); font-style: italic; }
+  .msg.err { color: #ff8a8a; }
+
+  footer { padding: 12px 22px 18px; display: flex; gap: 10px; align-items: center; }
+  #input { flex: 1; background: rgba(63,224,255,.05); border: 1px solid var(--c2); color: var(--ink);
+    padding: 13px 16px; border-radius: 4px; font-size: 16px; outline: none; }
+  #input:focus { border-color: var(--c); box-shadow: 0 0 12px rgba(63,224,255,.25); }
+  button { background: transparent; color: var(--c); border: 1px solid var(--c2); border-radius: 4px;
+    padding: 12px 14px; font-size: 14px; cursor: pointer; letter-spacing: .1em; }
+  button:hover, button.on { background: var(--c); color: var(--bg); }
+  .small { font-size: 11px; padding: 6px 8px; }
+</style>
+</head>
+<body>
+<header>
+  <div><b>URA</b> · trợ lý AI cá nhân</div>
+  <div id="clock"></div>
+</header>
+<main>
+  <section id="core-wrap">
+    <div id="core" title="Nhấn để nói">
+      <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div><div class="ring r4"></div>
+      <div class="orb"></div>
+    </div>
+    <div id="state">trực tuyến</div>
+  </section>
+  <section id="log" aria-live="polite"></section>
+</main>
+<footer>
+  <button id="mic" title="Nói với Ura (hoặc nhấn vào lõi)">🎙</button>
+  <input id="input" placeholder="Ra lệnh cho Ura… (hoặc nói “Ura ơi …”)" autocomplete="off">
+  <button id="send">GỬI</button>
+  <button id="wake" class="small" title="Luôn lắng nghe từ khóa “Ura ơi”">WAKE</button>
+  <button id="voice" class="small on" title="Bật/tắt giọng đọc">LOA</button>
+  <button id="reset" class="small" title="Bắt đầu phiên mới">MỚI</button>
+</footer>
+<script>
+const $ = (s) => document.querySelector(s);
+const log = $("#log"), core = $("#core"), stateEl = $("#state"), input = $("#input");
+let sessionId = null, busy = false, speakOn = true, wakeMode = false, userName = "sếp";
+
+// ---------- Trạng thái lõi ----------
+function setState(s, label) {
+  core.className = s; stateEl.textContent = label ||
+    ({ "": "trực tuyến", listening: "đang nghe", thinking: "đang xử lý", speaking: "đang nói" }[s]);
+}
+setInterval(() => { $("#clock").textContent = new Date().toLocaleString("vi-VN"); }, 1000);
+
+function addMsg(who, text, cls) {
+  const el = document.createElement("div");
+  el.className = "msg " + cls;
+  el.innerHTML = `<span class="who">${who}</span><span class="body"></span>`;
+  el.querySelector(".body").textContent = text || "";
+  log.appendChild(el); log.scrollTop = log.scrollHeight;
+  return el;
+}
+
+// ---------- Giọng nói (Text-to-Speech) ----------
+let viVoice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  viVoice = vs.find(v => v.lang.startsWith("vi")) || null;
+}
+if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function speak(text) {
+  if (!speakOn || !("speechSynthesis" in window) || !text.trim()) return;
+  const clean = text.replace(/[*#`_>\[\]]/g, "").replace(/\(https?:[^)]+\)/g, "");
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = "vi-VN"; if (viVoice) u.voice = viVoice; u.rate = 1.05;
+  u.onstart = () => setState("speaking");
+  u.onend = () => { if (!busy) setState(wakeMode ? "listening" : "", wakeMode ? "chờ “Ura ơi”" : undefined); };
+  speechSynthesis.speak(u);
+}
+
+// ---------- Gửi tin nhắn tới Ura ----------
+async function send(text) {
+  text = text.trim(); if (!text || busy) return;
+  busy = true; input.value = ""; speechSynthesis?.cancel();
+  addMsg("BẠN", text, "me");
+  const el = addMsg("URA", "", "ura"), body = el.querySelector(".body");
+  const status = document.createElement("span"); status.className = "status"; el.appendChild(status);
+  setState("thinking");
+  let full = "", spoken = 0;
+  try {
+    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, session_id: sessionId }) });
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (!line.trim()) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "session") sessionId = ev.session_id;
+        else if (ev.type === "text") {
+          full += ev.text; body.textContent = full; status.textContent = "";
+          // Đọc từng câu hoàn chỉnh ngay khi có để phản hồi nhanh hơn
+          const m = full.slice(spoken).match(/^[\s\S]*?[.!?…\n](\s|$)/);
+          if (m) { speak(m[0]); spoken += m[0].length; }
+        }
+        else if (ev.type === "status") status.textContent = ev.text;
+        else if (ev.type === "tool") status.textContent = "⚙ " + ev.name;
+        else if (ev.type === "action") handleAction(ev);
+        else if (ev.type === "error") { el.classList.add("err"); body.textContent = full + (full ? "\n" : "") + ev.text; speak(ev.text); }
+      }
+      log.scrollTop = log.scrollHeight;
+    }
+  } catch (e) {
+    el.classList.add("err"); body.textContent = "Không kết nối được tới lõi Ura: " + e.message;
+  }
+  status.textContent = "";
+  if (full.slice(spoken).trim()) speak(full.slice(spoken));
+  busy = false;
+  setState(wakeMode ? "listening" : "", wakeMode ? "chờ “Ura ơi”" : undefined);
+}
+
+function handleAction(ev) {
+  if (ev.action === "open_url") window.open(ev.url, "_blank", "noopener");
+  if (ev.action === "set_theme") { document.documentElement.dataset.theme = ev.color; localStorage.uraTheme = ev.color; }
+}
+if (localStorage.uraTheme) document.documentElement.dataset.theme = localStorage.uraTheme;
+
+// ---------- Nhận dạng giọng nói (Speech-to-Text) ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, recActive = false;
+const WAKE = /(^|\s)(ura|u ra|iu ra|yura|hura)\s*(ơi|à|này)?[,\s]*/i;
+
+function startRec(continuous) {
+  if (!SR) { addMsg("URA", "Trình duyệt này chưa hỗ trợ nhận dạng giọng nói. Hãy dùng Chrome hoặc Edge.", "ura err"); return; }
+  if (recActive) return;
+  rec = new SR(); rec.lang = "vi-VN"; rec.interimResults = true; rec.continuous = continuous;
+  rec.onstart = () => { recActive = true; setState("listening", continuous ? "chờ “Ura ơi”" : "đang nghe"); $("#mic").classList.add("on"); };
+  rec.onresult = (e) => {
+    const r = e.results[e.results.length - 1], t = r[0].transcript;
+    if (!continuous) { input.value = t; if (r.isFinal) { rec.stop(); send(t); } return; }
+    if (r.isFinal && WAKE.test(t)) {
+      const cmd = t.replace(WAKE, " ").trim();
+      if (cmd) send(cmd); else { speak("Vâng, " + userName + "?"); oneShotAfterWake = true; rec.stop(); }
+    }
+  };
+  rec.onend = () => {
+    recActive = false; $("#mic").classList.remove("on");
+    if (oneShotAfterWake) { oneShotAfterWake = false; setTimeout(() => startRec(false), 900); return; }
+    if (wakeMode && !busy) setTimeout(() => startRec(true), 300);
+    else if (!busy && !speechSynthesis?.speaking) setState("");
+  };
+  rec.onerror = (e) => { if (e.error === "not-allowed") { wakeMode = false; $("#wake").classList.remove("on"); } };
+  rec.start();
+}
+let oneShotAfterWake = false;
+
+$("#mic").onclick = core.onclick = () => { speechSynthesis?.cancel(); recActive ? rec.stop() : startRec(false); };
+$("#wake").onclick = () => {
+  wakeMode = !wakeMode; $("#wake").classList.toggle("on", wakeMode);
+  if (wakeMode) startRec(true); else { rec?.stop(); setState(""); }
+};
+$("#voice").onclick = () => { speakOn = !speakOn; $("#voice").classList.toggle("on", speakOn); if (!speakOn) speechSynthesis?.cancel(); };
+$("#send").onclick = () => send(input.value);
+input.onkeydown = (e) => { if (e.key === "Enter") send(input.value); };
+$("#reset").onclick = async () => {
+  await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: "", session_id: sessionId }) });
+  sessionId = null; log.innerHTML = ""; greet();
+};
+
+// ---------- Lời nhắc đến hạn ----------
+setInterval(async () => {
+  try {
+    const { due } = await (await fetch("/api/reminders")).json();
+    for (const t of due) {
+      const txt = `${userName}, nhắc nhở: ${t.title}.`;
+      addMsg("URA · NHẮC VIỆC", txt, "ura"); speak(txt);
+      if ("Notification" in window && Notification.permission === "granted") new Notification("Ura", { body: t.title });
+    }
+  } catch {}
+}, 30000);
+if ("Notification" in window && Notification.permission === "default") Notification.requestPermission();
+
+// ---------- Lời chào ----------
+function greet() {
+  const h = new Date().getHours();
+  const buoi = h < 11 ? "Chào buổi sáng" : h < 14 ? "Chào buổi trưa" : h < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+  addMsg("URA", `${buoi}, ${userName}. Mọi hệ thống đã trực tuyến. Tôi có thể giúp gì?`, "ura");
+}
+fetch("/api/info").then(r => r.json()).then(i => { userName = i.user; greet(); }).catch(greet);
+</script>
+</body>
+</html>
